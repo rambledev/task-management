@@ -1,0 +1,113 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String?
+  password_hash   String
+  department_id   String?
+  position        String?
+  phone           String?
+  is_active       Boolean   @default(true)
+  last_login      DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  role            String    @default("employee") // director, header, employee
+
+  // Relations
+  department      Department? @relation(fields: [department_id], references: [id])
+  created_tasks   Task[]     @relation("TaskCreator")
+  assigned_tasks  Task[]     @relation("TaskAssignee")
+  task_updates    TaskUpdate[]
+
+  @@map("users")
+}
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  parent_id   String?
+  level       Int?
+  description String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  parent      Department? @relation("DepartmentHierarchy", fields: [parent_id], references: [id])
+  children    Department[] @relation("DepartmentHierarchy")
+  users       User[]
+  tasks       Task[]
+
+  @@map("departments")
+}
+
+model Task {
+  id               String     @id @default(cuid())
+  title            String
+  description      String?
+  due_date         DateTime?
+  start_date       DateTime?
+  completed_at     DateTime?
+  creator_id       String
+  assignee_id      String?
+  department_id    String?
+  parent_task_id   String?
+  created_at       DateTime   @default(now())
+  updated_at       DateTime   @updatedAt
+  
+  // สถานะการมอบหมาย
+  assignment_status String    @default("draft") // draft, assigned, acknowledged, in_progress, submitted, revision_requested, revising, completed
+  
+  // สถานะเวลา
+  time_status      String     @default("on_time") // on_time, delayed, overdue
+  
+  priority         String     @default("medium") // low, medium, high, urgent
+  progress         Int        @default(0) // 0-100%
+  
+  // วันที่สำคัญ
+  assigned_at      DateTime?  // วันที่มอบหมาย
+  acknowledged_at  DateTime?  // วันที่รับทราบ
+  submitted_at     DateTime?  // วันที่ส่งงาน
+  
+  // หมายเหตุ
+  creator_notes    String?    // หมายเหตุจากผู้สั่งงาน
+  assignee_notes   String?    // หมายเหตุจากผู้รับงาน
+
+  // Relations
+  creator          User       @relation("TaskCreator", fields: [creator_id], references: [id])
+  assignee         User?      @relation("TaskAssignee", fields: [assignee_id], references: [id])
+  department       Department? @relation(fields: [department_id], references: [id])
+  parent_task      Task?      @relation("TaskHierarchy", fields: [parent_task_id], references: [id])
+  subtasks         Task[]     @relation("TaskHierarchy")
+  updates          TaskUpdate[]
+
+  @@map("tasks")
+}
+
+model TaskUpdate {
+  id          String   @id @default(cuid())
+  task_id     String
+  user_id     String
+  update_type String   // progress_update, status_change, note_added, file_attached
+  old_value   String?
+  new_value   String?
+  progress    Int?     // สำหรับการอัปเดตความคืบหน้า
+  notes       String?
+  created_at  DateTime @default(now())
+
+  // Relations
+  task        Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [user_id], references: [id])
+
+  @@map("task_updates")
+}
